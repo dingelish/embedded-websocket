@@ -19,3 +19,6 @@ rand_core = "0.5"
 
 [dev-dependencies]
 rand = "0.7.3"
+rustls = "0.19"
+webpki = "*"
+webpki-roots = "*"

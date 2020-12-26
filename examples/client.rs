@@ -14,6 +14,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::str::Utf8Error;
 use ws::{WebSocketCloseStatusCode, WebSocketReceiveMessageType, WebSocketSendMessageType};
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub enum WebClientError {
@@ -50,8 +51,8 @@ pub fn template_client() -> Result<()> {
 
     // initiate a websocket opening handshake
     let websocket_options = WebSocketOptions {
-        path: "/chat",
-        host: "localhost",
+        path: "/",
+        host: "echo.websocket.org",
         origin: "http://localhost",
         sub_protocols: None,
         additional_headers: None,
@@ -97,7 +98,7 @@ pub fn template_client() -> Result<()> {
     Ok(())
 }
 
-fn write_all(stream: &mut TcpStream, buffer: &[u8]) -> Result<()> {
+fn write_all<T: Write>(stream: &mut T, buffer: &[u8]) -> Result<()> {
     let mut from = 0;
     loop {
         let bytes_sent = stream.write(&buffer[from..])?;
@@ -112,12 +113,26 @@ fn write_all(stream: &mut TcpStream, buffer: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// Build a `ClientConfig` from our arguments
+fn make_config() -> Arc<rustls::ClientConfig> {
+    let mut config = rustls::ClientConfig::new();
+    //config.alpn_protocols = vec![b"http/1.1".to_vec()];
+    config.root_store.add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
+    Arc::new(config)
+}
+
 fn main() -> Result<()> {
     // open a TCP stream to localhost port 1337
-    let address = "127.0.0.1:1337";
+    let address = "echo.websocket.org:443";
     println!("Connecting to: {}", address);
     let mut stream = TcpStream::connect(address)?;
     println!("Connected.");
+
+    // rustls client session
+    let hostname_ref = webpki::DNSNameRef::try_from_ascii_str("echo.websocket.org").unwrap();
+    let cfg = make_config();
+    let mut sess = rustls::ClientSession::new(&cfg, hostname_ref);
+    let mut stream = rustls::Stream::new(&mut sess, &mut stream);
 
     let mut buffer1: [u8; 4000] = [0; 4000];
     let mut buffer2: [u8; 4000] = [0; 4000];
@@ -125,8 +140,8 @@ fn main() -> Result<()> {
 
     // initiate a websocket opening handshake
     let websocket_options = WebSocketOptions {
-        path: "/chat",
-        host: "localhost",
+        path: "/",
+        host: "echo.websocket.org",
         origin: "http://localhost:1337",
         sub_protocols: None,
         additional_headers: None,
